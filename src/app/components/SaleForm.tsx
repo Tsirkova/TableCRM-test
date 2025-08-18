@@ -1,3 +1,4 @@
+// ./src/app/components/SaleForm.tsx
 "use client";
 
 import GoodsPicker from "./GoodsPicker";
@@ -5,14 +6,12 @@ import GoodsAutocomplete from "./GoodsAutocomplete";
 import OrderLinesTable, { Line } from "./Table";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Card, Form, Input, Select, Space, Button, InputNumber,
-  Typography, Divider, message
-} from "antd";
+import { Card, Form, Input, Select, Space, Button, Typography, Divider, message } from "antd";
+import axios from "axios";
 import {
   api, Id, Organization, Warehouse,
   Paybox, PriceType, Contragent,
-  NomenclatureLite, CreateSalePayload
+  NomenclatureLite
 } from "../api";
 
 const { Title, Text } = Typography;
@@ -28,14 +27,10 @@ export default function SaleForm() {
   const [whs, setWhs] = useState<Warehouse[]>([]);
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
   const [contragents, setContragents] = useState<Contragent[]>([]);
-  const [goodsQuick, setGoodsQuick] = useState<NomenclatureLite[]>([]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  // alt_prices каталожные параметры
-  const [priceTypeId, setPriceTypeId] = useState<Id | null>(null);
   const [warehouseId, setWarehouseId] = useState<Id | 0>(0);
-
   const [lines, setLines] = useState<Line[]>([]);
 
   // добавить строку
@@ -69,14 +64,18 @@ export default function SaleForm() {
     setLoading(true);
 
     const aborts: AbortController[] = [];
-    const make = () => { const c = new AbortController(); aborts.push(c); return { signal: c.signal }; };
+    const make = () => {
+      const c = new AbortController();
+      aborts.push(c);
+      return { signal: c.signal as AbortSignal };
+    };
 
     (async () => {
       try {
         const [p, o, w, pt, ca] = await Promise.all([
-          api.payboxes(token, "", make()),
+          api.payboxes(token, { name: "" }, make()), 
           api.organizations(token, { name: "" }, make()),
-          api.warehouses(token, "", make()),
+          api.warehouses(token, { name: "" }, make()),
           api.priceTypes(token, make()),
           api.contragents(token, make()),
         ]);
@@ -86,9 +85,10 @@ export default function SaleForm() {
         setPriceTypes(pt);
         setContragents(ca);
         message.success("Справочники загружены");
-      } catch (e) {
-        if ((e as any)?.name !== "CanceledError")
+      } catch (err: unknown) {
+        if (!axios.isCancel(err)) {
           message.error("Не удалось загрузить справочники");
+        }
       } finally {
         setLoading(false);
       }
@@ -99,7 +99,7 @@ export default function SaleForm() {
 
   // поиск контрагента по телефону
   const searchByPhone = async () => {
-    const phone = form.getFieldValue("phone");
+    const phone = form.getFieldValue("phone") as string | undefined;
     if (!token || !phone) return message.warning("Введите токен и телефон");
     try {
       const list = await api.contragentsByPhone(token, phone);
@@ -107,29 +107,17 @@ export default function SaleForm() {
       if (list.length) {
         form.setFieldsValue({ contragent: list[0].id });
         message.success(`Найдено: ${list.length}`);
-      } else message.info("Ничего не найдено");
+      } else {
+        message.info("Ничего не найдено");
+      }
     } catch {
       message.error("Ошибка поиска");
     }
   };
 
-  // быстрый поиск товаров по имени
-  const searchGoods = async () => {
-    const q = form.getFieldValue("goods_query") ?? "";
-    if (!token) return message.warning("Введите токен");
-    const list = await api.searchNomenclature(token, q);
-    const mapped: NomenclatureLite[] = list.map((x: any) => ({
-      key: x.id ?? x.key ?? x.nomenclature_id,
-      name: x.name ?? x.title ?? x.caption,
-      unit_name: x.unit_name,
-      price: x.price ?? x.default_price,
-    })).filter((x: any) => x.key && x.name);
-    setGoodsQuick(mapped);
-  };
-
   // итоги
-  const total = useMemo(() =>
-    lines.reduce((s, l) => s + (l.price - l.discount) * l.quantity - l.sum_discounted, 0),
+  const total = useMemo(
+    () => lines.reduce((s, l) => s + (l.price - l.discount) * l.quantity - l.sum_discounted, 0),
     [lines]
   );
 
@@ -156,18 +144,18 @@ export default function SaleForm() {
           <Button onClick={searchByPhone}>Найти по телефону</Button>
         </Space.Compact>
         <Form.Item name="contragent" label="Контрагент">
-        <Select
+          <Select
             showSearch
             optionFilterProp="label"
             placeholder={contragents.length ? "Выберите" : "Нет данных"}
             options={contragents.map(c => ({ value: c.id, label: c.name }))}
-            onChange={(id) => {
-            const c = contragents.find(x => x.id === id);
-            if (c?.phone) {
-                form.setFieldsValue({ phone: c.phone });
-            }
+            onChange={(id: number) => {
+              const c = contragents.find(x => x.id === id);
+              if (c?.phone) {
+                form.setFieldsValue({ phone: c.phone }); // подставляем как есть, без нормализации
+              }
             }}
-        />
+          />
         </Form.Item>
 
         <Divider />
@@ -188,14 +176,13 @@ export default function SaleForm() {
         <Form.Item name="warehouse" label="Склад" rules={[{ required: true }]}>
           <Select
             options={whs.map(w => ({ value: w.id, label: w.name }))}
-            onChange={(v) => setWarehouseId(v)}
+            onChange={(v: Id) => setWarehouseId(v)}
           />
         </Form.Item>
         <Form.Item name="price_type" label="Тип цены">
           <Select
             allowClear
             options={priceTypes.map(pt => ({ value: pt.id, label: pt.name }))}
-            onChange={(v) => setPriceTypeId(v ?? null)}
           />
         </Form.Item>
 
@@ -205,10 +192,10 @@ export default function SaleForm() {
         <Title level={5}>Товары</Title>
 
         <Space.Compact style={{ width: "100%" }}>
-            <Button type="primary" onClick={() => setPickerOpen(true)}>
-                Выбрать
-            </Button>
-            <GoodsAutocomplete token={token} onPick={(n) => addLine(n)} />
+          <Button type="primary" onClick={() => setPickerOpen(true)}>
+            Выбрать
+          </Button>
+          <GoodsAutocomplete token={token} onPick={addLine} />
         </Space.Compact>
 
         {/* Lines table */}
@@ -221,7 +208,7 @@ export default function SaleForm() {
         {/* Actions */}
         <Space style={{ justifyContent: "flex-end", width: "100%", marginTop: 12 }}>
           <Button>Создать</Button>
-          <Button type="primary" >Создать и провести</Button>
+          <Button type="primary">Создать и провести</Button>
         </Space>
       </Form>
 
@@ -238,6 +225,7 @@ export default function SaleForm() {
             unit_name: nom.unit_name,
             price: 0,
           });
+          setPickerOpen(false);
         }}
       />
     </Card>

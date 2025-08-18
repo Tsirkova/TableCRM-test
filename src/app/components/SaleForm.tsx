@@ -141,7 +141,7 @@ export default function SaleForm() {
           <Form.Item name="phone" style={{ flex: 1, marginBottom: 0 }}>
             <Input placeholder="+7 (000) 000-00-00" />
           </Form.Item>
-          <Button onClick={searchByPhone}>Найти по телефону</Button>
+          <Button onClick={searchByPhone}>Найти</Button>
         </Space.Compact>
         <Form.Item name="contragent" label="Контрагент">
           <Select
@@ -191,12 +191,26 @@ export default function SaleForm() {
         {/* Goods */}
         <Title level={5}>Товары</Title>
 
-        <Space.Compact style={{ width: "100%" }}>
-          <Button type="primary" onClick={() => setPickerOpen(true)}>
+       <div
+        style={{
+            display: "flex",
+            width: "100%",
+            gap: 8,
+            alignItems: "center",
+        }}
+        >
+        <Button
+            type="primary"
+            onClick={() => setPickerOpen(true)}
+            style={{ flexShrink: 0 }}
+        >
             Выбрать
-          </Button>
-          <GoodsAutocomplete token={token} onPick={addLine} />
-        </Space.Compact>
+        </Button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+            <GoodsAutocomplete token={token} onPick={addLine} />
+        </div>
+        </div>
+
 
         {/* Lines table */}
         <OrderLinesTable lines={lines} setLines={setLines} />

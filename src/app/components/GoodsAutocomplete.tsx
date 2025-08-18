@@ -83,7 +83,7 @@ export default function GoodsAutocomplete({ token, onPick }: Props) {
   return (
     <Space.Compact style={{ width: "100%" }}>
       <AutoComplete
-        style={{ width: "100%" }}
+        style={{ width: "100%", minWidth: 0 }}
         value={q}
         options={opts}
         onSearch={onSearch}

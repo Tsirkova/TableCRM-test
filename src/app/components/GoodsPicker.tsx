@@ -39,6 +39,9 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
   const [rows, setRows] = useState<NomenclatureRow[]>([]);
   const [q, setQ] = useState("");
 
+  // активная вкладка (по умолчанию "Категории")
+  const [activeTab, setActiveTab] = useState<"categories" | "goods">("categories");
+
   // загрузка категорий
   useEffect(() => {
     if (!open || !token) return;
@@ -68,6 +71,8 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
         limit: 100000,
       });
       setRows(list);
+      // на мобильном после выбора категории переключаемся на вкладку "Товары"
+      if (isMobile) setActiveTab("goods");
     } finally {
       setLoading(false);
     }
@@ -81,19 +86,26 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
     );
   }, [rows, q]);
 
+  // универсальный стиль для переносов текста в карточке
+  const wrapStyle: React.CSSProperties = {
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  };
+
   const PricesCell = ({ r }: { r: NomenclatureRow }) => (
-    <Text ellipsis>
+    <div style={wrapStyle}>
       {(r.prices ?? []).map((p) => `${p.price_type}: ${p.price}`).join(", ")}
-    </Text>
+    </div>
   );
 
   const BalancesCell = ({ r }: { r: NomenclatureRow }) => (
-    <Text ellipsis>
+    <div style={wrapStyle}>
       {(r.balances ?? [])
         .slice(0, 3)
         .map((b) => `${b.warehouse_name}: ${b.current_amount}`)
         .join(", ")}
-    </Text>
+    </div>
   );
 
   const handlePick = async (id: number) => {
@@ -111,20 +123,17 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
       style={isMobile ? { top: 0, padding: 0 } : undefined}
       bodyStyle={isMobile ? { padding: 12 } : undefined}
       title="Выбор номенклатуры"
+      afterOpenChange={(opened) => {
+        // при каждом открытии модалки снова фокус на вкладку "Категории"
+        if (opened) setActiveTab("categories");
+      }}
     >
-      <Space style={{ width: "100%", marginBottom: 8 }}>
-        <Input
-          placeholder="Поиск по названию/коду"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          allowClear
-        />
-      </Space>
 
       {isMobile ? (
-        // === Мобильный вид: вкладки + карточки ===
+        // === Мобильный вид: вкладки ===
         <Tabs
-          defaultActiveKey="goods"
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as "categories" | "goods")}
           items={[
             {
               key: "categories",
@@ -164,29 +173,23 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
                       <Card
                         size="small"
                         title={
-                          <Space direction="vertical" size={0} style={{ width: "100%" }}>
-                            <Text strong>{r.name}</Text>
-                            {r.code ? <Text type="secondary">Код: {r.code}</Text> : null}
-                          </Space>
-                        }
-                        extra={
-                          <Button type="link" onClick={() => handlePick(r.id)}>
-                            Выбрать
-                          </Button>
+                          <div style={{ ...wrapStyle }}>
+                            <Text strong style={wrapStyle}>{r.name}</Text>
+                          </div>
                         }
                         styles={{ body: { paddingTop: 12 } }}
                       >
                         <Space direction="vertical" size="small" style={{ width: "100%" }}>
                           <div>
                             <Text type="secondary">Цены</Text>
-                            <div>
+                            <div style={wrapStyle}>
                               <PricesCell r={r} />
                             </div>
                           </div>
 
                           <div>
                             <Text type="secondary">Остатки</Text>
-                            <div>
+                            <div style={wrapStyle}>
                               <BalancesCell r={r} />
                             </div>
                           </div>
@@ -194,14 +197,14 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
                           {r.unit_name ? (
                             <div>
                               <Text type="secondary">Единица</Text>
-                              <div>
-                                <Text>{r.unit_name}</Text>
+                              <div style={wrapStyle}>
+                                <Text style={wrapStyle}>{r.unit_name}</Text>
                               </div>
                             </div>
                           ) : null}
 
                           <Divider style={{ margin: "8px 0" }} />
-                          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                          <div style={{ display: "flex", justifyContent: "flex-start" }}>
                             <Button type="primary" onClick={() => handlePick(r.id)}>
                               Выбрать
                             </Button>
@@ -248,12 +251,10 @@ export default function GoodsPicker({ token, open, onClose, onPick, warehouseId 
                 {
                   title: "Цены",
                   render: (_: unknown, r) => <PricesCell r={r} />,
-                  ellipsis: true,
                 },
                 {
                   title: "Остатки",
                   render: (_: unknown, r) => <BalancesCell r={r} />,
-                  ellipsis: true,
                 },
                 { title: "Единица", dataIndex: "unit_name", width: 120 },
                 {

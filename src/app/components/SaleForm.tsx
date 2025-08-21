@@ -368,7 +368,6 @@ export default function SaleForm() {
         <Form.Item name="price_type" label="Тип цены" preserve={false}>
           <Select
             allowClear
-            placeholder="Если не выберете — возьмём тип из товара"
             options={priceTypes.map(pt => ({ value: pt.id, label: pt.name }))}
           />
         </Form.Item>

@@ -210,7 +210,13 @@ export default function SaleForm() {
     if (!token) return message.warning("Вставьте токен");
     if (!lines.length) return message.warning("Добавьте хотя бы одну позицию");
 
-    const badPrices = lines.filter(l => (l.price ?? 0) <= 0);
+    // блокируем только отрицательные цены
+    const badPrices = lines.filter(l => (l.price ?? 0) < 0);
+    if (badPrices.length) {
+      message.error(`Цена должна быть ≥ 0 у: ${badPrices.map(x => `"${x.name}"`).join(", ")}`);
+      return;
+    }
+
     const badQty = lines.filter(l => (l.quantity ?? 0) <= 0);
     if (badPrices.length) {
       message.error(`Цена должна быть > 0 у: ${badPrices.map(x => `"${x.name}"`).join(", ")}`);

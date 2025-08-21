@@ -47,30 +47,55 @@ export interface NomenclatureDetail {
 }
 
 export interface SaleLine {
-  nomenclature: Id;
   price: number;
   quantity: number;
   unit: number;
   discount: number;
   sum_discounted: number;
+  nomenclature: Id;
 }
 
 export interface CreateSalePayload {
+  dated: number; // unix timestamp (в секундах)
   operation: "Заказ";
   tax_included: boolean;
   tax_active: boolean;
   goods: SaleLine[];
+  settings: { date_next_created: null };
+  loyality_card_id?: number | null;
   warehouse: Id;
   contragent: Id | null;
   paybox: Id;
   organization: Id;
-  status: boolean;
+  status: boolean; // false — черновик, true — провести
   paid_rubles: number;
   paid_lt: number;
-  settings: { date_next_created: null };
 }
 
-// ───────── helpers (без any) ─────────
+export interface AltPriceParams {
+  price_type_id: Id;
+  category?: Id;
+  in_warehouse?: Id | 0;
+  limit?: number;
+  with_prices?: boolean;
+  with_balance?: boolean;
+}
+
+export interface AltPriceRowRaw {
+  id: Id;
+  nomenclature_id: Id;
+  nomenclature_name: string;
+  unit: number;
+  unit_name: string;
+  price: number;
+  price_type: string;
+  date_from: number | null;
+  date_to: number | null;
+  updated_at: number;
+  created_at: number;
+}
+
+// ───────── helpers ─────────
 type ListResponse<T> = T[] | { result?: T[]; results?: T[]; count?: number };
 
 function propArray<T>(obj: unknown, key: "result" | "results" | "data"): T[] {
@@ -106,7 +131,6 @@ async function getJSON<T>(url: string, cfg?: AxiosRequestConfig): Promise<T> {
 
 // ───────── API ─────────
 export const api = {
-  // payboxes
   async payboxes(token: string, params?: { name?: string; limit?: number; offset?: number }, cfg?: AxiosRequestConfig): Promise<Paybox[]> {
     const data = await getJSON<ListResponse<Paybox>>(`${API_BASE}/payboxes/`, {
       params: { token, ...(params ?? {}) },
@@ -115,7 +139,6 @@ export const api = {
     return toArray<Paybox>(data);
   },
 
-  // organizations
   async organizations(token: string, params?: { name?: string; limit?: number; offset?: number }, cfg?: AxiosRequestConfig): Promise<Organization[]> {
     const data = await getJSON<ListResponse<Organization>>(`${API_BASE}/organizations/`, {
       params: { token, ...(params ?? {}) },
@@ -124,7 +147,6 @@ export const api = {
     return toArray<Organization>(data);
   },
 
-  // warehouses
   async warehouses(token: string, params?: { name?: string; limit?: number; offset?: number }, cfg?: AxiosRequestConfig): Promise<Warehouse[]> {
     const data = await getJSON<ListResponse<Warehouse>>(`${API_BASE}/warehouses/`, {
       params: { token, ...(params ?? {}) },
@@ -133,7 +155,6 @@ export const api = {
     return toArray<Warehouse>(data);
   },
 
-  // price types
   async priceTypes(token: string, cfg?: AxiosRequestConfig): Promise<PriceType[]> {
     const data = await getJSON<ListResponse<PriceType>>(`${API_BASE}/price_types/`, {
       params: { token },
@@ -142,7 +163,6 @@ export const api = {
     return toArray<PriceType>(data);
   },
 
-  // contragents list
   async contragents(token: string, cfg?: AxiosRequestConfig): Promise<Contragent[]> {
     const data = await getJSON<ListResponse<Contragent>>(`${API_BASE}/contragents/`, {
       params: { token },
@@ -151,7 +171,6 @@ export const api = {
     return toArray<Contragent>(data);
   },
 
-  // contragents by phone
   async contragentsByPhone(token: string, phone: string, cfg?: AxiosRequestConfig): Promise<Contragent[]> {
     const data = await getJSON<ListResponse<Contragent>>(`${API_BASE}/contragents/`, {
       params: { token, phone, add_tags: true, _ts: Date.now() },
@@ -160,7 +179,6 @@ export const api = {
     return toArray<Contragent>(data);
   },
 
-  // nomenclature search (возвращаем unknown[], маппинг на клиенте)
   async searchNomenclature(token: string, name = "", cfg?: AxiosRequestConfig): Promise<unknown[]> {
     const data = await getJSON<unknown>(`${API_BASE}/nomenclature/`, {
       params: { token, name, _ts: Date.now() },
@@ -169,7 +187,6 @@ export const api = {
     return toArray<unknown>(data);
   },
 
-  // categories tree
   async categoriesTree(token: string, cfg?: AxiosRequestConfig): Promise<Category[]> {
     const data = await getJSON<{ result?: Category[] } | Category[]>(`${API_BASE}/categories_tree/`, {
       params: { token, _ts: Date.now() },
@@ -178,7 +195,6 @@ export const api = {
     return toArray<Category>(data);
   },
 
-  // nomenclature by category
   async nomenclatureByCategory(
     token: string,
     p: { category: number; with_prices?: boolean; with_balance?: boolean; in_warehouse?: number | 0; limit?: number },
@@ -199,7 +215,6 @@ export const api = {
     return toArray<NomenclatureRow>(data);
   },
 
-  // nomenclature by id
   async nomenclatureById(token: string, id: number, cfg?: AxiosRequestConfig): Promise<NomenclatureDetail> {
     const data = await getJSON<NomenclatureDetail>(`${API_BASE}/nomenclature/${id}/`, {
       params: { token, _ts: Date.now() },
@@ -208,18 +223,18 @@ export const api = {
     return data;
   },
 
-  // alt prices
+  // Список альтернативных цен (оставляем на всякий случай)
   async altPrices(
     token: string,
-    tableId: Id,
-    params: { price_type_id: Id; category: Id; in_warehouse?: Id | 0; limit?: number; with_prices?: boolean; with_balance?: boolean },
+    tableId: Id, // может быть ID товара или таблицы — зависит от API-конфигурации
+    params: AltPriceParams,
     cfg?: AxiosRequestConfig
   ): Promise<NomenclatureLite[]> {
-    const data = await getJSON<unknown>(`${API_BASE}/alt_prices/${tableId}`, {
+    const data = await getJSON<unknown>(`${API_BASE}/alt_prices/${tableId}/`, {
       params: {
         token,
         price_type_id: params.price_type_id,
-        category: params.category,
+        ...(params.category != null ? { category: params.category } : {}),
         with_prices: params.with_prices ?? true,
         with_balance: params.with_balance ?? true,
         in_warehouse: params.in_warehouse ?? 0,
@@ -228,19 +243,56 @@ export const api = {
       },
       ...(cfg ?? {}),
     });
-    const list = toArray<{ key: Id; name: string; unit_name?: string; price?: number }>(data);
-    return list.map(x => ({ key: x.key, name: x.name, unit_name: x.unit_name, price: x.price }));
+    const list = toArray<{
+      id: Id;
+      nomenclature_id?: Id;
+      nomenclature_name?: string;
+      name?: string;
+      unit_name?: string;
+      price?: number;
+    }>(data);
+    return list.map(x => ({
+      key: (x.nomenclature_id ?? x.id) as Id,
+      name: x.nomenclature_name ?? x.name ?? "",
+      unit_name: x.unit_name,
+      price: x.price,
+    }));
   },
 
-  // create sale
-  async createSale(token: string, payload: CreateSalePayload): Promise<{ id?: Id } | undefined> {
-    const { data } = await axios.post<{ id?: Id }>(`${API_BASE}/docs_sales/`, payload, {
-      params: { token },
+  // Точечная цена по номенклатуре и виду цены
+  async altPriceByNomId(
+    token: string,
+    nomId: Id,
+    params: { price_type_id: Id; in_warehouse?: Id | 0 },
+    cfg?: AxiosRequestConfig
+  ): Promise<AltPriceRowRaw> {
+    const data = await getJSON<AltPriceRowRaw>(`${API_BASE}/alt_prices/${nomId}/`, {
+      params: {
+        token,
+        price_type_id: params.price_type_id,
+        in_warehouse: params.in_warehouse ?? 0,
+        _ts: Date.now(),
+      },
+      ...(cfg ?? {}),
     });
     return data;
   },
 
-  // delivery info
+  // create sale — принимает объект ИЛИ массив, отправляет МАССИВ
+  async createSale(
+    token: string,
+    payload: CreateSalePayload | CreateSalePayload[],
+    cfg?: AxiosRequestConfig
+  ): Promise<{ id?: Id } | undefined> {
+    const body = Array.isArray(payload) ? payload : [payload];
+    const { data } = await axios.post<{ id?: Id }>(`${API_BASE}/docs_sales/`, body, {
+      params: { token },
+      headers: { "Content-Type": "application/json" },
+      ...cfg,
+    });
+    return data;
+  },
+
   async postDeliveryInfo(token: string, saleId: Id, body: Record<string, unknown>): Promise<void> {
     await axios.post(`${API_BASE}/docs_sales/${saleId}/delivery_info/`, body, {
       params: { token },

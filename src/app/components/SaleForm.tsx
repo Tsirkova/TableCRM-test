@@ -344,11 +344,6 @@ export default function SaleForm() {
           />
         </Form.Item>
 
-        {/* Loyality */}
-        <Form.Item name="loyality_card_id" label="Карта лояльности (ID)" preserve={false}>
-          <Input type="number" min={0} placeholder="например, 22476" />
-        </Form.Item>
-
         <Divider />
 
         {/* Requisites */}
